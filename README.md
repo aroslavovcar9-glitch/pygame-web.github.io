@@ -137,6 +137,10 @@ There's number of command line options : read Pygbag's [project description](htt
 
 Visit the [wiki](/wiki/) to get started!
 
+## Demo
+
+- [Voxel Craft Demo (Minecraft-like prototype)](/minecraft-clone/)
+
 
 **Work in progress, pull requests welcomed. Feel free to propose links to games or tutorials. Please contribute!!!**
 
