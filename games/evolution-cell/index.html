@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Эволюция клетки</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --panel: rgba(8, 15, 30, 0.78);
+      --accent: #74f7c9;
+      --danger: #ff6b8a;
+      --text: #eff7ff;
+      --muted: #a9b8c7;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 45%, #18315a 0%, #091220 58%, #03060d 100%);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: crosshair;
+    }
+
+    .hud {
+      position: fixed;
+      inset: 16px auto auto 16px;
+      display: grid;
+      gap: 10px;
+      width: min(360px, calc(100vw - 32px));
+      padding: 14px;
+      border: 1px solid rgba(116, 247, 201, 0.22);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(10px);
+      user-select: none;
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+
+    .badge {
+      border-radius: 999px;
+      padding: 4px 9px;
+      background: rgba(116, 247, 201, 0.13);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      border-radius: 12px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 20px;
+    }
+
+    .bar-wrap {
+      overflow: hidden;
+      height: 13px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.10);
+    }
+
+    .bar {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #66e4ff, var(--accent));
+      transition: width 180ms ease-out;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .evolutions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 28px;
+    }
+
+    .chip {
+      border-radius: 999px;
+      padding: 5px 8px;
+      background: rgba(255, 255, 255, 0.09);
+      color: #d9f7ff;
+      font-size: 12px;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      padding: 20px;
+      background: rgba(2, 5, 12, 0.58);
+      backdrop-filter: blur(8px);
+    }
+
+    .overlay.active { display: grid; }
+
+    .dialog {
+      width: min(860px, 100%);
+      border: 1px solid rgba(116, 247, 201, 0.28);
+      border-radius: 26px;
+      padding: 24px;
+      background: linear-gradient(180deg, rgba(19, 35, 63, 0.96), rgba(7, 12, 24, 0.96));
+      box-shadow: 0 24px 90px rgba(0, 0, 0, 0.55);
+      text-align: center;
+    }
+
+    .dialog h1, .dialog h2 { margin: 0 0 10px; }
+    .dialog p { margin: 0 auto 20px; max-width: 620px; color: var(--muted); line-height: 1.5; }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .card {
+      min-height: 178px;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 20px;
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+    }
+
+    .card:hover, .card:focus-visible {
+      transform: translateY(-4px);
+      border-color: rgba(116, 247, 201, 0.75);
+      background: rgba(116, 247, 201, 0.12);
+      outline: none;
+    }
+
+    .card .icon { font-size: 36px; }
+    .card h3 { margin: 10px 0 8px; }
+    .card p { margin: 0; font-size: 14px; }
+
+    .primary {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 22px;
+      background: linear-gradient(90deg, #66e4ff, var(--accent));
+      color: #041018;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(116, 247, 201, 0.22);
+    }
+
+    .danger-text { color: var(--danger); font-weight: 800; }
+
+    @media (max-width: 720px) {
+      .hud { inset: 10px 10px auto 10px; width: auto; }
+      .choice-grid { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .dialog { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game" aria-label="Игра Эволюция клетки"></canvas>
+
+  <section class="hud" aria-live="polite">
+    <div class="title-row">
+      <div>🧬 Эволюция клетки</div>
+      <div class="badge" id="stateBadge">Ешь меньших</div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span>Опыт</span><strong id="xpText">0/10</strong></div>
+      <div class="stat"><span>Уровень</span><strong id="levelText">0/10</strong></div>
+      <div class="stat"><span>Размер</span><strong id="sizeText">24</strong></div>
+    </div>
+    <div class="bar-wrap" title="Прогресс до следующей эволюции"><div class="bar" id="xpBar"></div></div>
+    <div class="hint">Двигайтесь мышью или касанием. Маленькие клетки дают опыт, большие пытаются съесть вас.</div>
+    <div class="evolutions" id="evolutionList"><span class="chip">Эволюций пока нет</span></div>
+  </section>
+
+  <div class="overlay active" id="startOverlay">
+    <div class="dialog">
+      <h1>Стань сильнейшей клеткой</h1>
+      <p>Собирай клетки меньше себя, избегай крупных организмов и каждые 10 очков опыта выбирай одну из трёх случайных эволюций. Уже выбранные эволюции больше не повторяются.</p>
+      <button class="primary" id="startButton">Начать эволюцию</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="choiceOverlay">
+    <div class="dialog">
+      <h2>Выберите эволюцию</h2>
+      <p>Доступные варианты выбираются случайно из оставшихся 10 эволюций. Выбранная способность исчезнет из будущих выборов.</p>
+      <div class="choice-grid" id="choiceGrid"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="gameOverOverlay">
+    <div class="dialog">
+      <h2 id="gameOverTitle">Клетка поглощена</h2>
+      <p id="gameOverText">Более крупная клетка оказалась быстрее. Попробуйте снова и выбирайте эволюции под свой стиль игры.</p>
+      <button class="primary" id="restartButton">Играть снова</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const xpText = document.getElementById('xpText');
+    const levelText = document.getElementById('levelText');
+    const sizeText = document.getElementById('sizeText');
+    const xpBar = document.getElementById('xpBar');
+    const stateBadge = document.getElementById('stateBadge');
+    const evolutionList = document.getElementById('evolutionList');
+    const startOverlay = document.getElementById('startOverlay');
+    const choiceOverlay = document.getElementById('choiceOverlay');
+    const choiceGrid = document.getElementById('choiceGrid');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const gameOverTitle = document.getElementById('gameOverTitle');
+    const gameOverText = document.getElementById('gameOverText');
+
+    const WORLD = { width: 2600, height: 1800 };
+    const XP_PER_EVOLUTION = 10;
+    const MAX_EVOLUTIONS = 10;
+
+    const EVOLUTIONS = [
+      { id: 'speed', icon: '⚡', name: 'Жгутики', description: '+18% к скорости движения.', apply: p => p.speed *= 1.18 },
+      { id: 'armor', icon: '🛡️', name: 'Плотная мембрана', description: 'Крупные враги должны быть ещё больше, чтобы съесть вас.', apply: p => p.armor += 0.08 },
+      { id: 'digest', icon: '🧪', name: 'Ферменты', description: '+35% опыта за съеденные клетки.', apply: p => p.xpMultiplier += 0.35 },
+      { id: 'growth', icon: '🌱', name: 'Быстрый рост', description: 'Мгновенно увеличивает размер клетки.', apply: p => p.radius += 7 },
+      { id: 'vision', icon: '👁️', name: 'Рецепторы', description: 'Опасные клетки подсвечиваются заметнее и раньше.', apply: p => p.vision += 160 },
+      { id: 'magnet', icon: '🧲', name: 'Питательный магнит', description: 'Малые клетки слегка притягиваются к вам.', apply: p => p.magnet += 0.9 },
+      { id: 'split', icon: '✨', name: 'Митоз', description: 'Следующие клетки пищи появляются чаще.', apply: p => p.spawnBonus += 0.55 },
+      { id: 'spikes', icon: '🔰', name: 'Шипы', description: 'Можно есть клетки почти своего размера.', apply: p => p.attack += 0.10 },
+      { id: 'regen', icon: '💚', name: 'Регенерация', description: 'После опасного столкновения часть размера сохраняется.', apply: p => p.regen = true },
+      { id: 'nerve', icon: '🧠', name: 'Нервная сеть', description: 'Управление становится отзывчивее.', apply: p => p.control += 0.18 },
+    ];
+
+    let player;
+    let cells = [];
+    let particles = [];
+    let camera = { x: 0, y: 0 };
+    let pointer = { x: innerWidth / 2, y: innerHeight / 2, active: false };
+    let running = false;
+    let pausedForChoice = false;
+    let lastTime = 0;
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function rand(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function distance(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function resize() {
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(innerWidth * ratio);
+      canvas.height = Math.floor(innerHeight * ratio);
+      canvas.style.width = `${innerWidth}px`;
+      canvas.style.height = `${innerHeight}px`;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    function resetGame() {
+      player = {
+        x: WORLD.width / 2,
+        y: WORLD.height / 2,
+        vx: 0,
+        vy: 0,
+        radius: 24,
+        speed: 245,
+        xp: 0,
+        level: 0,
+        armor: 0,
+        attack: 0,
+        xpMultiplier: 1,
+        vision: 300,
+        magnet: 0,
+        spawnBonus: 0,
+        regen: false,
+        control: 1,
+        chosen: [],
+      };
+      cells = [];
+      particles = [];
+      for (let i = 0; i < 75; i += 1) spawnCell();
+      updateHud();
+    }
+
+    function spawnCell() {
+      const progress = player ? player.level / MAX_EVOLUTIONS : 0;
+      const minRadius = 8 + progress * 4;
+      const maxRadius = 62 + progress * 30;
+      const radius = rand(minRadius, maxRadius);
+      cells.push({
+        x: rand(radius, WORLD.width - radius),
+        y: rand(radius, WORLD.height - radius),
+        vx: rand(-30, 30),
+        vy: rand(-30, 30),
+        radius,
+        hue: rand(165, 330),
+        wobble: rand(0, Math.PI * 2),
+      });
+    }
+
+    function startGame() {
+      startOverlay.classList.remove('active');
+      gameOverOverlay.classList.remove('active');
+      choiceOverlay.classList.remove('active');
+      resetGame();
+      running = true;
+      pausedForChoice = false;
+      lastTime = performance.now();
+      requestAnimationFrame(loop);
+    }
+
+    function updatePointer(clientX, clientY) {
+      pointer.x = clientX;
+      pointer.y = clientY;
+      pointer.active = true;
+    }
+
+    function eatCell(index) {
+      const cell = cells[index];
+      const gained = Math.max(1, Math.round((cell.radius / 9) * player.xpMultiplier));
+      player.xp += gained;
+      player.radius += cell.radius * 0.035;
+      burst(cell.x, cell.y, cell.hue, 14);
+      cells.splice(index, 1);
+      const spawnCount = Math.random() < player.spawnBonus ? 2 : 1;
+      for (let i = 0; i < spawnCount; i += 1) spawnCell();
+      while (player.xp >= XP_PER_EVOLUTION && player.level < MAX_EVOLUTIONS) {
+        player.xp -= XP_PER_EVOLUTION;
+        offerEvolution();
+        break;
+      }
+      if (player.level >= MAX_EVOLUTIONS) {
+        player.xp = 0;
+      }
+      updateHud();
+    }
+
+    function burst(x, y, hue, count) {
+      for (let i = 0; i < count; i += 1) {
+        particles.push({
+          x, y,
+          vx: rand(-120, 120),
+          vy: rand(-120, 120),
+          life: rand(0.25, 0.65),
+          hue,
+          size: rand(2, 5),
+        });
+      }
+    }
+
+    function offerEvolution() {
+      const remaining = EVOLUTIONS.filter(evolution => !player.chosen.includes(evolution.id));
+      if (!remaining.length) {
+        player.level = MAX_EVOLUTIONS;
+        return;
+      }
+
+      pausedForChoice = true;
+      choiceGrid.innerHTML = '';
+      const choices = shuffle(remaining).slice(0, Math.min(3, remaining.length));
+      choices.forEach(evolution => {
+        const button = document.createElement('button');
+        button.className = 'card';
+        button.innerHTML = `<div class="icon">${evolution.icon}</div><h3>${evolution.name}</h3><p>${evolution.description}</p>`;
+        button.addEventListener('click', () => chooseEvolution(evolution));
+        choiceGrid.appendChild(button);
+      });
+      choiceOverlay.classList.add('active');
+      updateHud();
+    }
+
+    function chooseEvolution(evolution) {
+      if (player.chosen.includes(evolution.id)) return;
+      player.chosen.push(evolution.id);
+      player.level = player.chosen.length;
+      evolution.apply(player);
+      burst(player.x, player.y, 150, 36);
+      choiceOverlay.classList.remove('active');
+      pausedForChoice = false;
+      updateHud();
+      if (player.level === MAX_EVOLUTIONS) {
+        stateBadge.textContent = 'Финальная форма';
+      }
+    }
+
+    function shuffle(items) {
+      const result = [...items];
+      for (let i = result.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+      return result;
+    }
+
+    function gameOver(message) {
+      if (player.regen && player.radius > 32) {
+        player.regen = false;
+        player.radius *= 0.68;
+        burst(player.x, player.y, 345, 48);
+        updateHud();
+        return;
+      }
+      running = false;
+      gameOverTitle.textContent = 'Клетка поглощена';
+      gameOverText.innerHTML = `${message}<br>Итог: ${player.level} эволюций из ${MAX_EVOLUTIONS}.`;
+      gameOverOverlay.classList.add('active');
+    }
+
+    function update(dt) {
+      const worldPointer = { x: pointer.x + camera.x, y: pointer.y + camera.y };
+      const angle = Math.atan2(worldPointer.y - player.y, worldPointer.x - player.x);
+      const desiredSpeed = clamp(distance(worldPointer, player) * 2.8, 0, player.speed);
+      const targetVx = Math.cos(angle) * desiredSpeed;
+      const targetVy = Math.sin(angle) * desiredSpeed;
+      const steering = clamp((4.8 + player.control * 2.5) * dt, 0, 1);
+      player.vx += (targetVx - player.vx) * steering;
+      player.vy += (targetVy - player.vy) * steering;
+      player.x = clamp(player.x + player.vx * dt, player.radius, WORLD.width - player.radius);
+      player.y = clamp(player.y + player.vy * dt, player.radius, WORLD.height - player.radius);
+
+      for (let i = cells.length - 1; i >= 0; i -= 1) {
+        const cell = cells[i];
+        cell.wobble += dt;
+        const isThreat = cell.radius > player.radius * (1 + player.armor);
+        const isFood = cell.radius < player.radius * (0.88 + player.attack);
+        const d = distance(player, cell);
+
+        if (player.magnet && isFood && d < 260) {
+          const pull = player.magnet * 38 * dt;
+          cell.x += ((player.x - cell.x) / Math.max(d, 1)) * pull;
+          cell.y += ((player.y - cell.y) / Math.max(d, 1)) * pull;
+        }
+
+        const drift = isThreat && d < player.vision ? 1.35 : 1;
+        cell.x += cell.vx * dt * drift;
+        cell.y += cell.vy * dt * drift;
+        if (cell.x < cell.radius || cell.x > WORLD.width - cell.radius) cell.vx *= -1;
+        if (cell.y < cell.radius || cell.y > WORLD.height - cell.radius) cell.vy *= -1;
+        cell.x = clamp(cell.x, cell.radius, WORLD.width - cell.radius);
+        cell.y = clamp(cell.y, cell.radius, WORLD.height - cell.radius);
+
+        if (d < Math.max(player.radius, cell.radius) * 0.72) {
+          if (isFood) {
+            eatCell(i);
+          } else if (isThreat) {
+            gameOver('Вас съела клетка большего размера.');
+          }
+        }
+      }
+
+      for (let i = particles.length - 1; i >= 0; i -= 1) {
+        const particle = particles[i];
+        particle.life -= dt;
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+        particle.vx *= 0.96;
+        particle.vy *= 0.96;
+        if (particle.life <= 0) particles.splice(i, 1);
+      }
+
+      camera.x = clamp(player.x - innerWidth / 2, 0, WORLD.width - innerWidth);
+      camera.y = clamp(player.y - innerHeight / 2, 0, WORLD.height - innerHeight);
+    }
+
+    function drawGrid() {
+      const grid = 90;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
+      ctx.lineWidth = 1;
+      const startX = Math.floor(camera.x / grid) * grid;
+      const startY = Math.floor(camera.y / grid) * grid;
+      for (let x = startX; x < camera.x + innerWidth + grid; x += grid) {
+        ctx.beginPath();
+        ctx.moveTo(x - camera.x, -camera.y);
+        ctx.lineTo(x - camera.x, WORLD.height - camera.y);
+        ctx.stroke();
+      }
+      for (let y = startY; y < camera.y + innerHeight + grid; y += grid) {
+        ctx.beginPath();
+        ctx.moveTo(-camera.x, y - camera.y);
+        ctx.lineTo(WORLD.width - camera.x, y - camera.y);
+        ctx.stroke();
+      }
+    }
+
+    function drawCell(cell, isPlayer = false) {
+      const x = cell.x - camera.x;
+      const y = cell.y - camera.y;
+      const radius = cell.radius + Math.sin((cell.wobble || performance.now() / 500)) * (isPlayer ? 1.2 : 0.8);
+      const gradient = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.35, radius * 0.2, x, y, radius);
+      const hue = isPlayer ? 155 : cell.hue;
+      gradient.addColorStop(0, `hsla(${hue}, 95%, 78%, 0.98)`);
+      gradient.addColorStop(0.62, `hsla(${hue}, 82%, 52%, 0.9)`);
+      gradient.addColorStop(1, `hsla(${hue}, 90%, 30%, 0.82)`);
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+      ctx.lineWidth = isPlayer ? 4 : 2;
+      ctx.strokeStyle = isPlayer ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.28)';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(x - radius * 0.2, y - radius * 0.18, radius * 0.22, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${hue + 25}, 95%, 88%, 0.30)`;
+      ctx.fill();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      drawGrid();
+
+      ctx.strokeStyle = 'rgba(116, 247, 201, 0.22)';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(-camera.x, -camera.y, WORLD.width, WORLD.height);
+
+      const sortedCells = [...cells].sort((a, b) => a.radius - b.radius);
+      for (const cell of sortedCells) {
+        const screenX = cell.x - camera.x;
+        const screenY = cell.y - camera.y;
+        if (screenX < -120 || screenX > innerWidth + 120 || screenY < -120 || screenY > innerHeight + 120) continue;
+        const threat = cell.radius > player.radius * (1 + player.armor) && distance(player, cell) < player.vision;
+        if (threat) {
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, cell.radius + 8, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255, 107, 138, 0.62)';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+        drawCell(cell);
+      }
+
+      for (const particle of particles) {
+        ctx.globalAlpha = clamp(particle.life * 2, 0, 1);
+        ctx.fillStyle = `hsl(${particle.hue}, 95%, 70%)`;
+        ctx.beginPath();
+        ctx.arc(particle.x - camera.x, particle.y - camera.y, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      drawCell({ ...player, wobble: performance.now() / 420 }, true);
+    }
+
+    function updateHud() {
+      xpText.textContent = player.level >= MAX_EVOLUTIONS ? 'MAX' : `${player.xp}/${XP_PER_EVOLUTION}`;
+      levelText.textContent = `${player.level}/${MAX_EVOLUTIONS}`;
+      sizeText.textContent = Math.round(player.radius);
+      xpBar.style.width = player.level >= MAX_EVOLUTIONS ? '100%' : `${(player.xp / XP_PER_EVOLUTION) * 100}%`;
+      const nearestThreat = cells.some(cell => cell.radius > player.radius * (1 + player.armor) && distance(player, cell) < player.vision);
+      stateBadge.textContent = player.level >= MAX_EVOLUTIONS ? 'Финальная форма' : nearestThreat ? 'Опасность рядом' : 'Ешь меньших';
+      stateBadge.classList.toggle('danger-text', nearestThreat);
+      evolutionList.innerHTML = '';
+      if (!player.chosen.length) {
+        evolutionList.innerHTML = '<span class="chip">Эволюций пока нет</span>';
+        return;
+      }
+      player.chosen.forEach(id => {
+        const evolution = EVOLUTIONS.find(item => item.id === id);
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.textContent = `${evolution.icon} ${evolution.name}`;
+        evolutionList.appendChild(chip);
+      });
+    }
+
+    function loop(now) {
+      if (!running) return;
+      const dt = Math.min((now - lastTime) / 1000, 0.033);
+      lastTime = now;
+      if (!pausedForChoice) {
+        update(dt);
+      }
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('mousemove', event => updatePointer(event.clientX, event.clientY));
+    window.addEventListener('touchstart', event => {
+      const touch = event.touches[0];
+      updatePointer(touch.clientX, touch.clientY);
+    }, { passive: true });
+    window.addEventListener('touchmove', event => {
+      const touch = event.touches[0];
+      updatePointer(touch.clientX, touch.clientY);
+    }, { passive: true });
+
+    document.getElementById('startButton').addEventListener('click', startGame);
+    document.getElementById('restartButton').addEventListener('click', startGame);
+
+    resize();
+    resetGame();
+    draw();
+  </script>
+</body>
+</html>
