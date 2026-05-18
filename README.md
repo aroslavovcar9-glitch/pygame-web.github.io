@@ -6,6 +6,8 @@ This is the CDN root used by [Pygbag](https://pypi.org/project/pygbag/). (pronou
 
 [The wiki](/wiki/).
 
+[Play the evolution cell game](/games/evolution-cell/).
+
 [Source code](https://github.com/pygame-web/pygbag)
 
 [Old runtimes and current](https://github.com/pygame-web/archives)
